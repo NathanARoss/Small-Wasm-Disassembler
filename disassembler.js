@@ -1,3 +1,5 @@
+const maxBytesPerLine = 16;
+
 class Wasm {
     static decodeVarint(bytes, offset) {
         let result = 0;
@@ -87,9 +89,9 @@ class Wasm {
   
       function printDisassembly(count, comment = "") {
         do {
-          const bytesThisLine = Math.min(9, count);
+          const bytesThisLine = Math.min(maxBytesPerLine, count);
           const bytes = Array.from(wasm.subarray(offset, offset + bytesThisLine));
-          const byteText = bytes.map(b => b.toString(16).padStart(2, "0")).join(" ").padEnd(27);
+          const byteText = bytes.map(b => b.toString(16).padStart(2, "0")).join(" ").padEnd(maxBytesPerLine * 3);
           const addressText = offset.toString().padStart(maxOffsetDigits, '0');
           output += `${byteText} @${addressText}: ${comment}\n`;
           offset += bytesThisLine;
@@ -150,7 +152,7 @@ class Wasm {
   
                 while (offset < end) {
                   //detect printable ASCII characters to display in the comments
-                  const count = Math.min(9, end - offset);
+                  const count = Math.min(maxBytesPerLine, end - offset);
                   const slice = wasm.slice(offset, offset + count);
                   const asText = Wasm.UTF8toString(slice).replace(/[^ -~]/g, '.');
                   printDisassembly(count, asText);
@@ -293,7 +295,7 @@ class Wasm {
   
               while (offset < subEnd) {
                 //detect printable ASCII characters to display in the comments
-                const count = Math.min(9, subEnd - offset);
+                const count = Math.min(maxBytesPerLine, subEnd - offset);
                 const slice = wasm.slice(offset, offset + count);
                 const asText = Wasm.UTF8toString(slice).replace(/[^ -~]/g, '.');
                 printDisassembly(count, asText);
@@ -577,11 +579,3 @@ Wasm.opcodeData = [
   new OpcodeData("f32.reinterpret/i32"),
   new OpcodeData("f64.reinterpret/i64"),
 ];
-
-Wasm.opcodes = {};
-for (let i = 0; i < Wasm.opcodeData.length; ++i) {
-  if (Wasm.opcodeData[i]) {
-    const propName = Wasm.opcodeData[i].name.replace(/\./, "_").replace(/\//, "_from_");
-    Wasm[propName] = i;
-  }
-}
