@@ -43,10 +43,12 @@ function handleFileSelect(event) {
 print("Select a .wasm file for disassembly\n");
 
 function receiveMessage(event) {
-    console.div(event);
+    console.dir(event);
     if (event.data.prototype === ArrayBuffer && event.data.length < 2**20) {
         disassemble(event.data);
     }
 }
 
 window.addEventListener("message", receiveMessage, false);
+
+window.postMessage("hello there", "*")
