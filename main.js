@@ -15,6 +15,12 @@ function clear() {
     consoleOutput.innerHTML = "";
 }
 
+function disassemble(arrayBuffer) {
+    const ubytes = new Uint8Array(arrayBuffer);
+    const disassembly = Wasm.getDisassembly(ubytes);
+    print(disassembly);
+}
+
 
 function handleFileSelect(event) {
     clear();
@@ -28,12 +34,18 @@ function handleFileSelect(event) {
 
     reader.onload = function(event) {
         const arrayBuffer = event.target.result;
-        const ubytes = new Uint8Array(arrayBuffer);
-        const disassembly = Wasm.getDisassembly(ubytes);
-        print(disassembly);
+        disassemble(arrayBuffer);
     }
 
     reader.readAsArrayBuffer(file);
 }
 
 print("Select a .wasm file for disassembly\n");
+
+function receiveMessage(event) {
+    if (event.data.prototype === ArrayBuffer && event.data.length < 2**20) {
+        disassemble(event.data);
+    }
+}
+
+window.addEventListener("message", receiveMessage, false);
