@@ -1,17 +1,15 @@
-const section = {
-    UserDefined: 0,
-    Type: 1,
-    Import: 2,
-    Function: 3,
-    Table: 4,
-    Memory: 5,
-    Global: 6,
-    Export: 7,
-    Start: 8,
-    Element: 9,
-    Code: 10,
-    Data: 11,
-}
+const SECTION_USER_DEFINED = 0;
+const SECTION_TYPE = 1;
+const SECTION_IMPORT = 2;
+const SECTION_FUNCTION = 3;
+const SECTION_TABLE = 4;
+const SECTION_MEMORY = 5;
+const SECTION_GLOBAL = 6;
+const SECTION_EXPORT = 7;
+const SECTION_START = 8;
+const SECTION_ELEMENT = 9;
+const SECTION_CODE = 10;
+const SECTION_DATA = 11;
 
 const sectionNames = [
     "User-defined",
@@ -28,15 +26,13 @@ const sectionNames = [
     "Data",
 ]
 
-const types = {
-    i32: 0x7F,
-    i64: 0x7E,
-    f32: 0x7D,
-    f64: 0x7C,
-    anyFunc: 0x70,
-    func: 0x60,
-    void: 0x40,
-}
+const TYPE_I32 = 0x7F;
+const TYPE_I64 = 0x7E;
+const TYPE_F32 = 0x7D;
+const TYPE_F64 = 0x7C;
+const TYPE_ANYFUNC = 0x70;
+const TYPE_FUNC = 0x60;
+const TYPE_VOID = 0x40;
 
 const typeNames = [];
 typeNames[0x7F] = "i32";
@@ -47,12 +43,10 @@ typeNames[0x70] = "anyFunc";
 typeNames[0x60] = "func";
 typeNames[0x40] = "void";
 
-const externalKind = {
-    Function: 0,
-    Table: 1,
-    Memory: 2,
-    Global: 3,
-}
+const EXTERNAL_FUNCTION = 0;
+const EXTERNAL_TABLE = 1;
+const EXTERNAL_MEMORY = 2;
+const EXTERNAL_GLOBAL = 3;
 
 const externalKindNames = [
     "Function",
@@ -61,206 +55,199 @@ const externalKindNames = [
     "Global",
 ]
 
-class OpcodeData {
-    constructor(name, ...immediates) {
-        this.name = name;
-        this.immediates = immediates;
-    }
-}
-
 const opcodeData = [
-    new OpcodeData("unreachable"),
-    new OpcodeData("nop"),
-    new OpcodeData("block", decodeVaruint),
-    new OpcodeData("loop", decodeVaruint),
-    new OpcodeData("if", decodeVaruint),
-    new OpcodeData("else"),
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    new OpcodeData("end"),
-    new OpcodeData("br", decodeVaruint),
-    new OpcodeData("br_if", decodeVaruint),
-    new OpcodeData("br_table", decodeBranchTable),
-    new OpcodeData("return"),
-    new OpcodeData("call", decodeVaruint), //0x10
-    new OpcodeData("call_indirect", decodeVaruint, decodeVaruint),
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    new OpcodeData("drop"),
-    new OpcodeData("select"),
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    new OpcodeData("get_local", decodeVaruint), //0x20
-    new OpcodeData("set_local", decodeVaruint),
-    new OpcodeData("tee_local", decodeVaruint),
-    new OpcodeData("get_global", decodeVaruint),
-    new OpcodeData("set_global", decodeVaruint),
-    undefined,
-    undefined,
-    undefined,
-    new OpcodeData("i32.load", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load", decodeVaruint, decodeVaruint),
-    new OpcodeData("f32.load", decodeVaruint, decodeVaruint),
-    new OpcodeData("f64.load", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.load8_s", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.load8_u", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.load16_s", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.load16_u", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load8_s", decodeVaruint, decodeVaruint), //0x30
-    new OpcodeData("i64.load8_u", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load16_s", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load16_u", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load32_s", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.load32_u", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.store", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.store", decodeVaruint, decodeVaruint),
-    new OpcodeData("f32.store", decodeVaruint, decodeVaruint),
-    new OpcodeData("f64.store", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.store8", decodeVaruint, decodeVaruint),
-    new OpcodeData("i32.store16", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.store8", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.store16", decodeVaruint, decodeVaruint),
-    new OpcodeData("i64.store32", decodeVaruint, decodeVaruint),
-    new OpcodeData("memory.size", decodeVaruint),
-    new OpcodeData("memory.grow", decodeVaruint), //0x40
-    new OpcodeData("i32.const", decodeVarint),
-    new OpcodeData("i64.const", decodeVarint),
-    new OpcodeData("f32.const", decodeF32),
-    new OpcodeData("f64.const", decodeF64),
-    new OpcodeData("i32.eqz"),
-    new OpcodeData("i32.eq"),
-    new OpcodeData("i32.ne"),
-    new OpcodeData("i32.lt_s"),
-    new OpcodeData("i32.lt_u"),
-    new OpcodeData("i32.gt_s"),
-    new OpcodeData("i32.gt_u"),
-    new OpcodeData("i32.le_s"),
-    new OpcodeData("i32.le_u"),
-    new OpcodeData("i32.ge_s"),
-    new OpcodeData("i32.ge_u"),
-    new OpcodeData("i64.eqz"), //0x50
-    new OpcodeData("i64.eq"),
-    new OpcodeData("i64.ne"),
-    new OpcodeData("i64.lt_s"),
-    new OpcodeData("i64.lt_u"),
-    new OpcodeData("i64.gt_s"),
-    new OpcodeData("i64.gt_u"),
-    new OpcodeData("i64.le_s"),
-    new OpcodeData("i64.le_u"),
-    new OpcodeData("i64.ge_s"),
-    new OpcodeData("i64.ge_u"),
-    new OpcodeData("f32.eq"),
-    new OpcodeData("f32.ne"),
-    new OpcodeData("f32.lt"),
-    new OpcodeData("f32.gt"),
-    new OpcodeData("f32.le"),
-    new OpcodeData("f32.ge"), //0x60
-    new OpcodeData("f64.eq"),
-    new OpcodeData("f64.ne"),
-    new OpcodeData("f64.lt"),
-    new OpcodeData("f64.gt"),
-    new OpcodeData("f64.le"),
-    new OpcodeData("f64.ge"),
-    new OpcodeData("i32.clz"),
-    new OpcodeData("i32.ctz"),
-    new OpcodeData("i32.popcnt"),
-    new OpcodeData("i32.add"),
-    new OpcodeData("i32.sub"),
-    new OpcodeData("i32.mul"),
-    new OpcodeData("i32.div_s"),
-    new OpcodeData("i32.div_u"),
-    new OpcodeData("i32.rem_s"),
-    new OpcodeData("i32.rem_u"), //0x70
-    new OpcodeData("i32.and"),
-    new OpcodeData("i32.or"),
-    new OpcodeData("i32.xor"),
-    new OpcodeData("i32.shl"),
-    new OpcodeData("i32.shr_s"),
-    new OpcodeData("i32.shr_u"),
-    new OpcodeData("i32.rotl"),
-    new OpcodeData("i32.rotr"),
-    new OpcodeData("i64.clz"),
-    new OpcodeData("i64.ctz"),
-    new OpcodeData("i64.popcnt"),
-    new OpcodeData("i64.add"),
-    new OpcodeData("i64.sub"),
-    new OpcodeData("i64.mul"),
-    new OpcodeData("i64.div_s"),
-    new OpcodeData("i64.div_u"), //0x80
-    new OpcodeData("i64.rem_s"),
-    new OpcodeData("i64.rem_u"),
-    new OpcodeData("i64.and"),
-    new OpcodeData("i64.or"),
-    new OpcodeData("i64.xor"),
-    new OpcodeData("i64.shl"),
-    new OpcodeData("i64.shr_s"),
-    new OpcodeData("i64.shr_u"),
-    new OpcodeData("i64.rotl"),
-    new OpcodeData("i64.rotr"),
-    new OpcodeData("f32.abs"),
-    new OpcodeData("f32.neg"),
-    new OpcodeData("f32.ceil"),
-    new OpcodeData("f32.floor"),
-    new OpcodeData("f32.trunc"),
-    new OpcodeData("f32.nearest"), //0x90
-    new OpcodeData("f32.sqrt"),
-    new OpcodeData("f32.add"),
-    new OpcodeData("f32.sub"),
-    new OpcodeData("f32.mul"),
-    new OpcodeData("f32.div"),
-    new OpcodeData("f32.min"),
-    new OpcodeData("f32.max"),
-    new OpcodeData("f32.copysign"),
-    new OpcodeData("f64.abs"),
-    new OpcodeData("f64.neg"),
-    new OpcodeData("f64.ceil"),
-    new OpcodeData("f64.floor"),
-    new OpcodeData("f64.trunc"),
-    new OpcodeData("f64.nearest"),
-    new OpcodeData("f64.sqrt"),
-    new OpcodeData("f64.add"), //0xa0
-    new OpcodeData("f64.sub"),
-    new OpcodeData("f64.mul"),
-    new OpcodeData("f64.div"),
-    new OpcodeData("f64.min"),
-    new OpcodeData("f64.max"),
-    new OpcodeData("f64.copysign"),
-    new OpcodeData("i32.wrap/i64"),
-    new OpcodeData("i32.trunc_s/f32"),
-    new OpcodeData("i32.trunc_u/f32"),
-    new OpcodeData("i32.trunc_s/f64"),
-    new OpcodeData("i32.trunc_u/f64"),
-    new OpcodeData("i64.extend_s/i32"),
-    new OpcodeData("i64.extend_u/i32"),
-    new OpcodeData("i64.trunc_s/f32"),
-    new OpcodeData("i64.trunc_u/f32"),
-    new OpcodeData("i64.trunc_s/f64"), //0xb0
-    new OpcodeData("i64.trunc_u/f64"),
-    new OpcodeData("f32.convert_s/i32"),
-    new OpcodeData("f32.convert_u/i32"),
-    new OpcodeData("f32.convert_s/i64"),
-    new OpcodeData("f32.convert_u/i64"),
-    new OpcodeData("f32.demote/f64"),
-    new OpcodeData("f64.convert_s/i32"),
-    new OpcodeData("f64.convert_u/i32"),
-    new OpcodeData("f64.convert_s/i64"),
-    new OpcodeData("f64.convert_u/i64"),
-    new OpcodeData("f64.promote/f32"),
-    new OpcodeData("i32.reinterpret/f32"),
-    new OpcodeData("i64.reinterpret/f64"),
-    new OpcodeData("f32.reinterpret/i32"),
-    new OpcodeData("f64.reinterpret/i64"),
+    ["unreachable"],
+    ["nop"],
+    ["block", decodeVaruint],
+    ["loop", decodeVaruint],
+    ["if", decodeVaruint],
+    ["else"],
+    ,
+    ,
+    ,
+    ,
+    ,
+    ["end"],
+    ["br", decodeVaruint],
+    ["br_if", decodeVaruint],
+    ["br_table", decodeBranchTable],
+    ["return"],
+    ["call", decodeVaruint], //0x10
+    ["call_indirect", decodeVaruint, decodeVaruint],
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ,
+    ["drop"],
+    ["select"],
+    ,
+    ,
+    ,
+    ,
+    ["get_local", decodeVaruint], //0x20
+    ["set_local", decodeVaruint],
+    ["tee_local", decodeVaruint],
+    ["get_global", decodeVaruint],
+    ["set_global", decodeVaruint],
+    ,
+    ,
+    ,
+    ["i32.load", decodeVaruint, decodeVaruint],
+    ["i64.load", decodeVaruint, decodeVaruint],
+    ["f32.load", decodeVaruint, decodeVaruint],
+    ["f64.load", decodeVaruint, decodeVaruint],
+    ["i32.load8_s", decodeVaruint, decodeVaruint],
+    ["i32.load8_u", decodeVaruint, decodeVaruint],
+    ["i32.load16_s", decodeVaruint, decodeVaruint],
+    ["i32.load16_u", decodeVaruint, decodeVaruint],
+    ["i64.load8_s", decodeVaruint, decodeVaruint], //0x30
+    ["i64.load8_u", decodeVaruint, decodeVaruint],
+    ["i64.load16_s", decodeVaruint, decodeVaruint],
+    ["i64.load16_u", decodeVaruint, decodeVaruint],
+    ["i64.load32_s", decodeVaruint, decodeVaruint],
+    ["i64.load32_u", decodeVaruint, decodeVaruint],
+    ["i32.store", decodeVaruint, decodeVaruint],
+    ["i64.store", decodeVaruint, decodeVaruint],
+    ["f32.store", decodeVaruint, decodeVaruint],
+    ["f64.store", decodeVaruint, decodeVaruint],
+    ["i32.store8", decodeVaruint, decodeVaruint],
+    ["i32.store16", decodeVaruint, decodeVaruint],
+    ["i64.store8", decodeVaruint, decodeVaruint],
+    ["i64.store16", decodeVaruint, decodeVaruint],
+    ["i64.store32", decodeVaruint, decodeVaruint],
+    ["memory.size", decodeVaruint],
+    ["memory.grow", decodeVaruint], //0x40
+    ["i32.const", decodeVarint],
+    ["i64.const", decodeVarint],
+    ["f32.const", decodeF32],
+    ["f64.const", decodeF64],
+    ["i32.eqz"],
+    ["i32.eq"],
+    ["i32.ne"],
+    ["i32.lt_s"],
+    ["i32.lt_u"],
+    ["i32.gt_s"],
+    ["i32.gt_u"],
+    ["i32.le_s"],
+    ["i32.le_u"],
+    ["i32.ge_s"],
+    ["i32.ge_u"],
+    ["i64.eqz"], //0x50
+    ["i64.eq"],
+    ["i64.ne"],
+    ["i64.lt_s"],
+    ["i64.lt_u"],
+    ["i64.gt_s"],
+    ["i64.gt_u"],
+    ["i64.le_s"],
+    ["i64.le_u"],
+    ["i64.ge_s"],
+    ["i64.ge_u"],
+    ["f32.eq"],
+    ["f32.ne"],
+    ["f32.lt"],
+    ["f32.gt"],
+    ["f32.le"],
+    ["f32.ge"], //0x60
+    ["f64.eq"],
+    ["f64.ne"],
+    ["f64.lt"],
+    ["f64.gt"],
+    ["f64.le"],
+    ["f64.ge"],
+    ["i32.clz"],
+    ["i32.ctz"],
+    ["i32.popcnt"],
+    ["i32.add"],
+    ["i32.sub"],
+    ["i32.mul"],
+    ["i32.div_s"],
+    ["i32.div_u"],
+    ["i32.rem_s"],
+    ["i32.rem_u"], //0x70
+    ["i32.and"],
+    ["i32.or"],
+    ["i32.xor"],
+    ["i32.shl"],
+    ["i32.shr_s"],
+    ["i32.shr_u"],
+    ["i32.rotl"],
+    ["i32.rotr"],
+    ["i64.clz"],
+    ["i64.ctz"],
+    ["i64.popcnt"],
+    ["i64.add"],
+    ["i64.sub"],
+    ["i64.mul"],
+    ["i64.div_s"],
+    ["i64.div_u"], //0x80
+    ["i64.rem_s"],
+    ["i64.rem_u"],
+    ["i64.and"],
+    ["i64.or"],
+    ["i64.xor"],
+    ["i64.shl"],
+    ["i64.shr_s"],
+    ["i64.shr_u"],
+    ["i64.rotl"],
+    ["i64.rotr"],
+    ["f32.abs"],
+    ["f32.neg"],
+    ["f32.ceil"],
+    ["f32.floor"],
+    ["f32.trunc"],
+    ["f32.nearest"], //0x90
+    ["f32.sqrt"],
+    ["f32.add"],
+    ["f32.sub"],
+    ["f32.mul"],
+    ["f32.div"],
+    ["f32.min"],
+    ["f32.max"],
+    ["f32.copysign"],
+    ["f64.abs"],
+    ["f64.neg"],
+    ["f64.ceil"],
+    ["f64.floor"],
+    ["f64.trunc"],
+    ["f64.nearest"],
+    ["f64.sqrt"],
+    ["f64.add"], //0xa0
+    ["f64.sub"],
+    ["f64.mul"],
+    ["f64.div"],
+    ["f64.min"],
+    ["f64.max"],
+    ["f64.copysign"],
+    ["i32.wrap/i64"],
+    ["i32.trunc_s/f32"],
+    ["i32.trunc_u/f32"],
+    ["i32.trunc_s/f64"],
+    ["i32.trunc_u/f64"],
+    ["i64.extend_s/i32"],
+    ["i64.extend_u/i32"],
+    ["i64.trunc_s/f32"],
+    ["i64.trunc_u/f32"],
+    ["i64.trunc_s/f64"], //0xb0
+    ["i64.trunc_u/f64"],
+    ["f32.convert_s/i32"],
+    ["f32.convert_u/i32"],
+    ["f32.convert_s/i64"],
+    ["f32.convert_u/i64"],
+    ["f32.demote/f64"],
+    ["f64.convert_s/i32"],
+    ["f64.convert_u/i32"],
+    ["f64.convert_s/i64"],
+    ["f64.convert_u/i64"],
+    ["f64.promote/f32"],
+    ["i32.reinterpret/f32"],
+    ["i64.reinterpret/f64"],
+    ["f32.reinterpret/i32"],
+    ["f64.reinterpret/i64"],
 ];
 
 function decodeVarint(bytes, offset) {
@@ -370,10 +357,10 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
     function printExpression() {
         const data = opcodeData[wasm[offset]];
-        let comment = data.name;
+        let comment = data[0];
         let bytesRead = 1;
         
-        for (const immediates of data.immediates) {
+        for (const immediates of data.slice(1)) {
             const valsAndBytesRead = immediates(wasm, offset + bytesRead);
             for (let i = 0; i < valsAndBytesRead.length; i += 2) {
                 comment += " " + valsAndBytesRead[i];
@@ -399,13 +386,13 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
         const end = offset + payloadLength;
 
         if (sectionCode !== 0) {
-            let firstItemLabel = sectionCode === section.Start ? "entry point: func " : "count: ";
+            let firstItemLabel = sectionCode === SECTION_START ? "entry point: func " : "count: ";
             readVaruintAndPrint(firstItemLabel);
         }
 
         while (offset < end) {
             switch (sectionCode) {
-                case section.UserDefined: {
+                case SECTION_USER_DEFINED: {
                     const [size, LEBbytes] = decodeVaruint(wasm, offset);
                     const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
                     const str = UTF8toString(UTF8bytes);
@@ -421,8 +408,8 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
 
-                case section.Type: {
-                    if (wasm[offset] === types.func) {
+                case SECTION_TYPE: {
+                    if (wasm[offset] === TYPE_FUNC) {
                         let bytesRead = 1;
 
                         let comment = "";
@@ -444,7 +431,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
                 
-                case section.Import: {
+                case SECTION_IMPORT: {
                     output += '\n';
                     for (const description of ['module: ', 'field:  ']) {
                         const [size, LEBbytes] = decodeVaruint(wasm, offset);
@@ -455,9 +442,9 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
 
                     const exportType = wasm[offset];
-                    if (exportType === externalKind.Memory) {
+                    if (exportType === EXTERNAL_MEMORY) {
                         //print memory description
-                        printDisassembly(1, "external " + externalKindNames[exportType]);
+                        printDisassembly(1, "external memory");
                         const maxPagesSpecifiedFlag = wasm[offset];
                         printDisassembly(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
                         readVaruintAndPrint("initial pages: ");
@@ -465,7 +452,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         if (maxPagesSpecifiedFlag) {
                             readVaruintAndPrint("max allocation: ", " pages");
                         }
-                    } else if (exportType === externalKind.Function) {
+                    } else if (exportType === EXTERNAL_FUNCTION) {
                         //print imported function's signature
                         const [type, LEBbytes] = decodeVaruint(wasm, offset + 1);
                         const comment = "external " + typeDescription[type];
@@ -473,13 +460,13 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
                 
-                case section.Function: {
+                case SECTION_FUNCTION: {
                     const [type, LEBbytes] = decodeVaruint(wasm, offset);
                     const comment = typeDescription[type];
                     printDisassembly(LEBbytes, comment);
                 } break;
 
-                case section.Table: {
+                case SECTION_TABLE: {
                     printDisassembly(1, "element type: " + typeNames[wasm[offset]]);
 
                     const maxSpecifiedFlag = wasm[offset];
@@ -491,7 +478,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
 
-                case section.Memory: {
+                case SECTION_MEMORY: {
                     //print memory description
                     const maxPagesSpecifiedFlag = wasm[offset];
                     printDisassembly(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
@@ -502,14 +489,14 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
 
-                case section.Global: {
+                case SECTION_GLOBAL: {
                     printDisassembly(1, typeNames[wasm[offset]]);
                     printDisassembly(1, wasm[offset] ? "mutable" : "immutable");
                     printExpression(); //expression of propper type
                     printExpression(); //end
                 } break;
 
-                case section.Export: {
+                case SECTION_EXPORT: {
                     const [size, LEBbytes] = decodeVaruint(wasm, offset);
                     const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
                     const str = UTF8toString(UTF8bytes);
@@ -523,7 +510,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     readVaruintAndPrint("index: ")
                 } break;
                 
-                case section.Code: {
+                case SECTION_CODE: {
                     output += '\n';
                     const bodySize = readVaruintAndPrint("func body size: ", " bytes");
                     const subEnd = offset + bodySize;
@@ -547,7 +534,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     }
                 } break;
 
-                case section.Data: {
+                case SECTION_DATA: {
                     readVaruintAndPrint("linear memory index: ");
                     printExpression(); //expression of type i32
                     printExpression(); //end
