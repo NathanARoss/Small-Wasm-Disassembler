@@ -1,3 +1,5 @@
+import getDisassembly from "./disassembler.mjs";
+
 const consoleOutput = document.getElementById("console-output");
 document.getElementById('file-picker').addEventListener('change', handleFileSelect, false);
 
@@ -17,7 +19,7 @@ function clear() {
 
 function disassemble(arrayBuffer) {
     const ubytes = new Uint8Array(arrayBuffer);
-    const disassembly = Wasm.getDisassembly(ubytes);
+    const disassembly = getDisassembly(ubytes);
     print(disassembly);
 }
 
