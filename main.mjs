@@ -1,4 +1,4 @@
-import getDisassembly from "./disassembler.mjs";
+import getDisassembly from "./disassembler.min.mjs";
 
 const consoleOutput = document.getElementById("console-output");
 document.getElementById('file-picker').addEventListener('change', handleFileSelect, false);
