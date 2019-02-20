@@ -72,7 +72,7 @@ const opcodeData = [
     ["br_if", decodeVaruint],
     ["br_table", decodeBranchTable],
     ["return"],
-    ["call", decodeVaruint], //0x10
+    ["call", decodeFunctionIndex], //0x10
     ["call_indirect", decodeVaruint, decodeVaruint],
     ,
     ,
@@ -315,6 +315,20 @@ function decodeBranchTable(bytes, offset) {
     return output;
 }
 
+const importedFunctionNames = [];
+function decodeFunctionIndex(byte, offset) {
+    const [index, bytesRead] = decodeVaruint(byte, offset);
+    const output = ["", bytesRead];
+
+    if (index < importedFunctionNames.length) {
+        output[0] = importedFunctionNames[index];
+    } else {
+        output[0] = String(index);
+    }
+
+    return output;
+}
+
 //converts a string into an array of UTF-8 bytes
 //the array is prepended by the size of the coded string encoded as a varuint
 //TODO support full UTF-8 rather than just ASCII
@@ -375,6 +389,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
     printDisassembly(4, "Wasm version: 1");
 
     const typeDescription = [];
+    importedFunctionNames.length = 0;
 
     while (offset < wasm.length) {
         output += '\n\n\n';
@@ -409,7 +424,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                 } break;
 
                 case SECTION_TYPE: {
-                    if (wasm[offset] === TYPE_FUNC) {
+                    // if (wasm[offset] === TYPE_FUNC) {
                         let bytesRead = 1;
 
                         let comment = "";
@@ -426,18 +441,19 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                         typeDescription.push(comment);
                         printDisassembly(bytesRead, comment);
-                    } else {
-                        throw "unrecognized Wasm type " + typeNames[type] || type;
-                    }
+                    // }
                 } break;
                 
                 case SECTION_IMPORT: {
                     output += '\n';
-                    for (const description of ['module: ', 'field:  ']) {
+
+                    const strs = [];
+                    for (const description of ['module:', 'field: ']) {
                         const [size, LEBbytes] = decodeVaruint(wasm, offset);
                         const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
                         const str = UTF8toString(UTF8bytes);
                         const sanitizedStr = str.replace(/\n/g, "\\n").replace(/\0/g, "\\0");
+                        strs.push(sanitizedStr);
                         printDisassembly(size + LEBbytes, `${description} "${sanitizedStr}"`);
                     }
 
@@ -457,6 +473,8 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         const [type, LEBbytes] = decodeVaruint(wasm, offset + 1);
                         const comment = "external " + typeDescription[type];
                         printDisassembly(LEBbytes + 1, comment);
+
+                        importedFunctionNames.push(strs.join("."));
                     }
                 } break;
                 
@@ -508,6 +526,17 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     printDisassembly(1, "type: " + exportTypeName);
 
                     readVaruintAndPrint("index: ")
+                } break;
+
+                case SECTION_ELEMENT: {
+                    readVaruintAndPrint("table index: ");
+                    printExpression(); //expression of type i32
+                    printExpression(); //end
+                    const elementCount = readVaruintAndPrint("element count: ");
+
+                    for (let i = 0; i < elementCount; ++i) {
+                        readVaruintAndPrint("function index: ");
+                    }
                 } break;
                 
                 case SECTION_CODE: {
