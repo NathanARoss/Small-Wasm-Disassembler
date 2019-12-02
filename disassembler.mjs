@@ -263,8 +263,8 @@ function decodeVarint(bytes, offset) {
 
         result |= (byte & 0x7F) << shift;
         shift += 7;
-    } while((byte & 0x80) != 0);
-    
+    } while ((byte & 0x80) != 0);
+
     /* sign bit of byte is second high order bit (0x40) */
     if ((shift < size) && (byte & 0x40)) {
         /* sign extend */
@@ -296,14 +296,15 @@ function decodeVaruint(bytes, offset) {
 
 function decodeBranchTable(bytes, offset) {
     const output = [];
-    
+
     //target_count
     let [val, bytesRead] = decodeVaruint(bytes, offset);
+    const target_count = val;
     offset += bytesRead;
     output.push(val, bytesRead);
-    
+
     //target_table (has target_count entries)
-    for (let i = 0; i < val; ++i) {
+    for (let i = 0; i < target_count; ++i) {
         [val, bytesRead] = decodeVaruint(bytes, offset);
         offset += bytesRead;
         output.push(val, bytesRead);
@@ -371,17 +372,24 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
     function printExpression() {
         const data = opcodeData[wasm[offset]];
+
+        // if (data === undefined) {
+        //     console.log("Processed ", offset, "/", wasm.length, " bytes.  Stopping due to unrecognized opcode " + wasm[offset]);
+        //     offset = wasm.length;
+        //     return;
+        // }
+
         let comment = data[0];
         let bytesRead = 1;
-        
+
         for (const immediates of data.slice(1)) {
             const valsAndBytesRead = immediates(wasm, offset + bytesRead);
             for (let i = 0; i < valsAndBytesRead.length; i += 2) {
                 comment += " " + valsAndBytesRead[i];
-                bytesRead += valsAndBytesRead[i+1];
+                bytesRead += valsAndBytesRead[i + 1];
             }
         }
-        
+
         printDisassembly(bytesRead, comment);
     }
 
@@ -395,7 +403,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
         output += '\n\n\n';
 
         const sectionCode = wasm[offset];
-        printDisassembly(1, "section: " + sectionNames[sectionCode] + " ("+sectionCode+")");
+        printDisassembly(1, "section: " + sectionNames[sectionCode] + " (" + sectionCode + ")");
 
         const payloadLength = readVaruintAndPrint("size: ", " bytes");
         const end = offset + payloadLength;
@@ -425,25 +433,25 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                 case SECTION_TYPE: {
                     // if (wasm[offset] === TYPE_FUNC) {
-                        let bytesRead = 1;
+                    let bytesRead = 1;
 
-                        let comment = "";
-                        for (const prefix of ["func (", ") -> ("]) {
-                            const [count, LEBbytes] = decodeVaruint(wasm, offset + bytesRead);
-                            bytesRead += LEBbytes;
-                            
-                            comment += prefix;
-                            const types = wasm.slice(offset + bytesRead, offset + bytesRead + count);
-                            comment += Array.from(types).map(t => typeNames[t & 0x7F]).join(" ");
-                            bytesRead += count;
-                        }
-                        comment += ')';
+                    let comment = "";
+                    for (const prefix of ["func (", ") -> ("]) {
+                        const [count, LEBbytes] = decodeVaruint(wasm, offset + bytesRead);
+                        bytesRead += LEBbytes;
 
-                        typeDescription.push(comment);
-                        printDisassembly(bytesRead, comment);
+                        comment += prefix;
+                        const types = wasm.slice(offset + bytesRead, offset + bytesRead + count);
+                        comment += Array.from(types).map(t => typeNames[t & 0x7F]).join(" ");
+                        bytesRead += count;
+                    }
+                    comment += ')';
+
+                    typeDescription.push(comment);
+                    printDisassembly(bytesRead, comment);
                     // }
                 } break;
-                
+
                 case SECTION_IMPORT: {
                     output += '\n';
 
@@ -477,7 +485,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         importedFunctionNames.push(strs.join("."));
                     }
                 } break;
-                
+
                 case SECTION_FUNCTION: {
                     const [type, LEBbytes] = decodeVaruint(wasm, offset);
                     const comment = typeDescription[type];
@@ -492,7 +500,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     readVaruintAndPrint("initial count: ");
 
                     if (maxSpecifiedFlag) {
-                            readVaruintAndPrint("maximum: ");
+                        readVaruintAndPrint("maximum: ");
                     }
                 } break;
 
@@ -503,7 +511,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     readVaruintAndPrint("initial pages: ");
 
                     if (maxPagesSpecifiedFlag) {
-                            readVaruintAndPrint("max allocation: ", " pages");
+                        readVaruintAndPrint("max allocation: ", " pages");
                     }
                 } break;
 
@@ -538,7 +546,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         readVaruintAndPrint("function index: ");
                     }
                 } break;
-                
+
                 case SECTION_CODE: {
                     output += '\n';
                     const bodySize = readVaruintAndPrint("func body size: ", " bytes");
@@ -546,7 +554,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                     let [localCount, bytesRead] = decodeVaruint(wasm, offset);
                     let localVariableComment = "local vars:";
-                    
+
                     for (let i = 0; i < localCount; ++i) {
                         const [count, LEBbytes] = decodeVaruint(wasm, offset + bytesRead);
                         bytesRead += LEBbytes;
@@ -555,9 +563,9 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         localVariableComment += (" " + typeNames[type]).repeat(count);
                         ++bytesRead;
                     }
-                    
+
                     printDisassembly(bytesRead, localVariableComment);
-                    
+
                     while (offset < subEnd) {
                         printExpression();
                     }
