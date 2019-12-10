@@ -349,71 +349,76 @@ function decodeF64(bytes, offset) {
 
 export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
     const wasm = new Uint8Array(wasmArrayBuffer);
-    const maxOffsetDigits = Math.ceil(Math.log2(wasm.length) / Math.log2(10));
-    let offset = 0;
+    const maxReadPosDigits = Math.ceil(Math.log2(wasm.length) / Math.log2(10));
+    let readPos = 0;
     let output = "";
 
-    function printDisassembly(count, comment = "") {
+    function printBytes(count, comment = "") {
         do {
             const bytesThisLine = Math.min(maxBytesPerLine, count);
-            const bytes = Array.from(wasm.subarray(offset, offset + bytesThisLine));
+            const bytes = Array.from(wasm.subarray(readPos, readPos + bytesThisLine));
             const byteText = bytes.map(b => b.toString(16).padStart(2, "0")).join(" ").padEnd(maxBytesPerLine * 3);
-            const addressText = offset.toString().padStart(maxOffsetDigits, '0');
+            const addressText = readPos.toString().padStart(maxReadPosDigits, '0');
             output += `${byteText} @${addressText}: ${comment}\n`;
-            offset += bytesThisLine;
+            readPos += bytesThisLine;
             count -= bytesThisLine;
+
+            //if a number of bytes spans across more than 1 line, only the first line
+            //displays the comment.
             comment = "";
         } while (count > 0);
     }
 
     function readVaruintAndPrint(beginComment = "", endComment = "") {
-        const [val, bytesRead] = decodeVaruint(wasm, offset);
-        printDisassembly(bytesRead, beginComment + val + endComment);
+        const [val, bytesRead] = decodeVaruint(wasm, readPos);
+        printBytes(bytesRead, beginComment + val + endComment);
         return val;
     }
 
-    function printExpression(nextKnownAddress) {
-        const wasmOp = wasm[offset];
-        const data = opcodeData[wasmOp];
+    function printOpcode(nextKnownAddress) {
+        const operation = wasm[readPos];
+        const data = opcodeData[operation];
 
         if (data === undefined) {
-            printDisassembly(1, "Unrecognized opcode");
+            printBytes(1, "Unrecognized opcode");
 
             //if the next valid address is known, jump to that
             //otherwise, the best course of action is to halt
-            offset = nextKnownAddress || wasm.length;
+            readPos = nextKnownAddress || wasm.length;
             return wasm_end_opcode;
         }
 
         let comment = data[0];
         let bytesRead = 1;
 
-        for (const immediates of data.slice(1)) {
-            const valsAndBytesRead = immediates(wasm, offset + bytesRead);
+        for (const immediateHandlers of data.slice(1)) {
+            const valsAndBytesRead = immediateHandlers(wasm, readPos + bytesRead);
             for (let i = 0; i < valsAndBytesRead.length; i += 2) {
                 comment += " " + valsAndBytesRead[i];
                 bytesRead += valsAndBytesRead[i + 1];
             }
         }
 
-        printDisassembly(bytesRead, comment);
-        return wasmOp;
+        printBytes(bytesRead, comment);
+        return operation;
     }
 
-    printDisassembly(4, 'Wasm magic number: "\\0asm"');
-    printDisassembly(4, "Wasm version: 1");
+    printBytes(4, 'Wasm magic number: "\\0asm"');
+    printBytes(4, "Wasm version: 1");
 
     const typeDescription = [];
+
+    //reset this array so imported functions in previous modules don't influence future modules
     importedFunctionNames.length = 0;
 
-    while (offset < wasm.length) {
+    while (readPos < wasm.length) {
         output += '\n\n\n';
 
-        const sectionCode = wasm[offset];
-        printDisassembly(1, "section: " + sectionNames[sectionCode] + " (" + sectionCode + ")");
+        const sectionCode = wasm[readPos];
+        printBytes(1, "section: " + sectionNames[sectionCode] + " (" + sectionCode + ")");
 
         const payloadLength = readVaruintAndPrint("size: ", " bytes");
-        const end = offset + payloadLength;
+        const end = readPos + payloadLength;
 
         //The first varuint defined after the section ID is either the entry point function index
         //or the number of entries inside a section.
@@ -422,21 +427,21 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
             readVaruintAndPrint(firstItemLabel);
         }
 
-        while (offset < end) {
+        while (readPos < end) {
             switch (sectionCode) {
                 case SECTION_USER_DEFINED: {
-                    const [size, LEBbytes] = decodeVaruint(wasm, offset);
-                    const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
+                    const [size, LEBbytes] = decodeVaruint(wasm, readPos);
+                    const UTF8bytes = wasm.slice(readPos + LEBbytes, readPos + LEBbytes + size);
                     const str = UTF8toString(UTF8bytes);
                     const sanitizedStr = str.replace(/\n/g, "\\n").replace(/\0/g, "\\0");
-                    printDisassembly(size + LEBbytes, `name: "${sanitizedStr}"`);
+                    printBytes(size + LEBbytes, `name: "${sanitizedStr}"`);
 
-                    while (offset < end) {
+                    while (readPos < end) {
                         //detect printable ASCII characters to display in the comments
-                        const count = Math.min(maxBytesPerLine, end - offset);
-                        const slice = wasm.slice(offset, offset + count);
+                        const count = Math.min(maxBytesPerLine, end - readPos);
+                        const slice = wasm.slice(readPos, readPos + count);
                         const asText = UTF8toString(slice).replace(/[^ -~]/g, '.');
-                        printDisassembly(count, asText);
+                        printBytes(count, asText);
                     }
                 } break;
 
@@ -446,18 +451,18 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                     let comment = "";
                     for (const prefix of ["func (", ") -> ("]) {
-                        const [count, LEBbytes] = decodeVaruint(wasm, offset + bytesRead);
+                        const [count, LEBbytes] = decodeVaruint(wasm, readPos + bytesRead);
                         bytesRead += LEBbytes;
 
                         comment += prefix;
-                        const types = wasm.slice(offset + bytesRead, offset + bytesRead + count);
+                        const types = wasm.slice(readPos + bytesRead, readPos + bytesRead + count);
                         comment += Array.from(types).map(t => typeNames[t & 0x7F]).join(" ");
                         bytesRead += count;
                     }
                     comment += ')';
 
                     typeDescription.push(comment);
-                    printDisassembly(bytesRead, comment);
+                    printBytes(bytesRead, comment);
                     // }
                 } break;
 
@@ -466,20 +471,20 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                     const strs = [];
                     for (const description of ['module:', 'field: ']) {
-                        const [size, LEBbytes] = decodeVaruint(wasm, offset);
-                        const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
+                        const [size, LEBbytes] = decodeVaruint(wasm, readPos);
+                        const UTF8bytes = wasm.slice(readPos + LEBbytes, readPos + LEBbytes + size);
                         const str = UTF8toString(UTF8bytes);
                         const sanitizedStr = str.replace(/\n/g, "\\n").replace(/\0/g, "\\0");
                         strs.push(sanitizedStr);
-                        printDisassembly(size + LEBbytes, `${description} "${sanitizedStr}"`);
+                        printBytes(size + LEBbytes, `${description} "${sanitizedStr}"`);
                     }
 
-                    const exportType = wasm[offset];
+                    const exportType = wasm[readPos];
                     if (exportType === EXTERNAL_MEMORY) {
                         //print memory description
-                        printDisassembly(1, "external memory");
-                        const maxPagesSpecifiedFlag = wasm[offset];
-                        printDisassembly(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
+                        printBytes(1, "external memory");
+                        const maxPagesSpecifiedFlag = wasm[readPos];
+                        printBytes(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
                         readVaruintAndPrint("initial pages: ");
 
                         if (maxPagesSpecifiedFlag) {
@@ -487,25 +492,25 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         }
                     } else if (exportType === EXTERNAL_FUNCTION) {
                         //print imported function's signature
-                        const [type, LEBbytes] = decodeVaruint(wasm, offset + 1);
+                        const [type, LEBbytes] = decodeVaruint(wasm, readPos + 1);
                         const comment = "external " + typeDescription[type];
-                        printDisassembly(LEBbytes + 1, comment);
+                        printBytes(LEBbytes + 1, comment);
 
                         importedFunctionNames.push(strs.join("."));
                     }
                 } break;
 
                 case SECTION_FUNCTION: {
-                    const [type, LEBbytes] = decodeVaruint(wasm, offset);
+                    const [type, LEBbytes] = decodeVaruint(wasm, readPos);
                     const comment = typeDescription[type];
-                    printDisassembly(LEBbytes, comment);
+                    printBytes(LEBbytes, comment);
                 } break;
 
                 case SECTION_TABLE: {
-                    printDisassembly(1, "element type: " + typeNames[wasm[offset]]);
+                    printBytes(1, "element type: " + typeNames[wasm[readPos]]);
 
-                    const maxSpecifiedFlag = wasm[offset];
-                    printDisassembly(1, maxSpecifiedFlag ? "limit" : "no limit");
+                    const maxSpecifiedFlag = wasm[readPos];
+                    printBytes(1, maxSpecifiedFlag ? "limit" : "no limit");
                     readVaruintAndPrint("initial count: ");
 
                     if (maxSpecifiedFlag) {
@@ -515,8 +520,8 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                 case SECTION_MEMORY: {
                     //print memory description
-                    const maxPagesSpecifiedFlag = wasm[offset];
-                    printDisassembly(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
+                    const maxPagesSpecifiedFlag = wasm[readPos];
+                    printBytes(1, maxPagesSpecifiedFlag ? "limit" : "no limit");
                     readVaruintAndPrint("initial pages: ");
 
                     if (maxPagesSpecifiedFlag) {
@@ -525,28 +530,28 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                 } break;
 
                 case SECTION_GLOBAL: {
-                    printDisassembly(1, typeNames[wasm[offset]]);
-                    printDisassembly(1, wasm[offset] ? "mutable" : "immutable");
-                    while (printExpression() !== wasm_end_opcode);
+                    printBytes(1, typeNames[wasm[readPos]]);
+                    printBytes(1, wasm[readPos] ? "mutable" : "immutable");
+                    while (printOpcode() !== wasm_end_opcode);
                 } break;
 
                 case SECTION_EXPORT: {
-                    const [size, LEBbytes] = decodeVaruint(wasm, offset);
-                    const UTF8bytes = wasm.slice(offset + LEBbytes, offset + LEBbytes + size);
+                    const [size, LEBbytes] = decodeVaruint(wasm, readPos);
+                    const UTF8bytes = wasm.slice(readPos + LEBbytes, readPos + LEBbytes + size);
                     const str = UTF8toString(UTF8bytes);
                     const sanitizedStr = str.replace(/\n/g, "\\n").replace(/\0/g, "\\0");
-                    printDisassembly(size + LEBbytes, `field: "${sanitizedStr}"`);
+                    printBytes(size + LEBbytes, `field: "${sanitizedStr}"`);
 
-                    const exportType = wasm[offset];
+                    const exportType = wasm[readPos];
                     const exportTypeName = externalKindNames[exportType];
-                    printDisassembly(1, "type: " + exportTypeName);
+                    printBytes(1, "type: " + exportTypeName);
 
                     readVaruintAndPrint("index: ")
                 } break;
 
                 case SECTION_ELEMENT: {
                     readVaruintAndPrint("table index: ");
-                    while (printExpression() !== wasm_end_opcode);
+                    while (printOpcode() !== wasm_end_opcode);
                     const elementCount = readVaruintAndPrint("element count: ");
 
                     for (let i = 0; i < elementCount; ++i) {
@@ -557,55 +562,55 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                 case SECTION_CODE: {
                     output += '\n';
                     const bodySize = readVaruintAndPrint("func body size: ", " bytes");
-                    const subEnd = offset + bodySize;
+                    const funcBodyEnd = readPos + bodySize;
 
-                    let [localCount, bytesRead] = decodeVaruint(wasm, offset);
+                    let [localCount, bytesRead] = decodeVaruint(wasm, readPos);
                     let localVariableComment = "local vars:";
 
                     for (let i = 0; i < localCount; ++i) {
-                        const [count, LEBbytes] = decodeVaruint(wasm, offset + bytesRead);
+                        const [count, LEBbytes] = decodeVaruint(wasm, readPos + bytesRead);
                         bytesRead += LEBbytes;
 
-                        const type = wasm[offset + bytesRead];
+                        const type = wasm[readPos + bytesRead];
                         localVariableComment += (" " + typeNames[type]).repeat(count);
                         ++bytesRead;
                     }
 
-                    printDisassembly(bytesRead, localVariableComment);
+                    printBytes(bytesRead, localVariableComment);
 
-                    while (offset < subEnd) {
-                        printExpression(subEnd);
+                    while (readPos < funcBodyEnd) {
+                        printOpcode(funcBodyEnd);
                     }
 
                     // Assume the function body size is correct.  If an opcode reads beyond
                     // the end of it's function body, reset the read position to the next
                     // known address (typically beginning of next function).
-                    offset = subEnd;
+                    readPos = funcBodyEnd;
                 } break;
 
                 case SECTION_DATA: {
                     readVaruintAndPrint("linear memory index: ");
-                    while (printExpression() !== wasm_end_opcode);
+                    while (printOpcode() !== wasm_end_opcode);
 
                     const dataSize = readVaruintAndPrint("size of data: ", " bytes");
-                    const subEnd = offset + dataSize;
+                    const subEnd = readPos + dataSize;
 
-                    while (offset < subEnd) {
+                    while (readPos < subEnd) {
                         //detect printable ASCII characters to display in the comments
-                        const count = Math.min(maxBytesPerLine, subEnd - offset);
-                        const slice = wasm.slice(offset, offset + count);
+                        const count = Math.min(maxBytesPerLine, subEnd - readPos);
+                        const slice = wasm.slice(readPos, readPos + count);
                         const asText = UTF8toString(slice).replace(/[^ -~]/g, '.');
-                        printDisassembly(count, asText);
+                        printBytes(count, asText);
                     }
                 } break;
 
                 default:
-                    printDisassembly(1);
+                    printBytes(1);
             }
         }
 
         //resets the read position to beginning of next section
-        offset = end;
+        readPos = end;
     }
 
     return output;
