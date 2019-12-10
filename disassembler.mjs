@@ -599,7 +599,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                         //detect printable ASCII characters to display in the comments
                         const count = Math.min(maxBytesPerLine, subEnd - readPos);
                         const slice = wasm.slice(readPos, readPos + count);
-                        const asText = UTF8toString(slice).replace(/[^ -~]/g, '.');
+                        const asText = UTF8toString(slice).replace(/[^ -~]/g, ' ').trimEnd();
                         printBytes(count, asText);
                     }
                 } break;
