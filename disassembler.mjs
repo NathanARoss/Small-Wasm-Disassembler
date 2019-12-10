@@ -34,6 +34,8 @@ const TYPE_ANYFUNC = 0x70;
 const TYPE_FUNC = 0x60;
 const TYPE_VOID = 0x40;
 
+const wasm_end_opcode = 11;
+
 const typeNames = [];
 typeNames[0x7F] = "i32";
 typeNames[0x7E] = "i64";
@@ -370,14 +372,18 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
         return val;
     }
 
-    function printExpression() {
-        const data = opcodeData[wasm[offset]];
+    function printExpression(nextKnownAddress) {
+        const wasmOp = wasm[offset];
+        const data = opcodeData[wasmOp];
 
-        // if (data === undefined) {
-        //     console.log("Processed ", offset, "/", wasm.length, " bytes.  Stopping due to unrecognized opcode " + wasm[offset]);
-        //     offset = wasm.length;
-        //     return;
-        // }
+        if (data === undefined) {
+            printDisassembly(1, "Unrecognized opcode");
+
+            //if the next valid address is known, jump to that
+            //otherwise, the best course of action is to halt
+            offset = nextKnownAddress || wasm.length;
+            return wasm_end_opcode;
+        }
 
         let comment = data[0];
         let bytesRead = 1;
@@ -391,6 +397,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
         }
 
         printDisassembly(bytesRead, comment);
+        return wasmOp;
     }
 
     printDisassembly(4, 'Wasm magic number: "\\0asm"');
@@ -408,8 +415,10 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
         const payloadLength = readVaruintAndPrint("size: ", " bytes");
         const end = offset + payloadLength;
 
+        //The first varuint defined after the section ID is either the entry point function index
+        //or the number of entries inside a section.
         if (sectionCode !== 0) {
-            let firstItemLabel = sectionCode === SECTION_START ? "entry point: func " : "count: ";
+            const firstItemLabel = sectionCode === SECTION_START ? "entry point: func " : "count: ";
             readVaruintAndPrint(firstItemLabel);
         }
 
@@ -518,8 +527,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                 case SECTION_GLOBAL: {
                     printDisassembly(1, typeNames[wasm[offset]]);
                     printDisassembly(1, wasm[offset] ? "mutable" : "immutable");
-                    printExpression(); //expression of propper type
-                    printExpression(); //end
+                    while (printExpression() !== wasm_end_opcode);
                 } break;
 
                 case SECTION_EXPORT: {
@@ -538,8 +546,7 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
 
                 case SECTION_ELEMENT: {
                     readVaruintAndPrint("table index: ");
-                    printExpression(); //expression of type i32
-                    printExpression(); //end
+                    while (printExpression() !== wasm_end_opcode);
                     const elementCount = readVaruintAndPrint("element count: ");
 
                     for (let i = 0; i < elementCount; ++i) {
@@ -567,14 +574,18 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
                     printDisassembly(bytesRead, localVariableComment);
 
                     while (offset < subEnd) {
-                        printExpression();
+                        printExpression(subEnd);
                     }
+
+                    // Assume the function body size is correct.  If an opcode reads beyond
+                    // the end of it's function body, reset the read position to the next
+                    // known address (typically beginning of next function).
+                    offset = subEnd;
                 } break;
 
                 case SECTION_DATA: {
                     readVaruintAndPrint("linear memory index: ");
-                    printExpression(); //expression of type i32
-                    printExpression(); //end
+                    while (printExpression() !== wasm_end_opcode);
 
                     const dataSize = readVaruintAndPrint("size of data: ", " bytes");
                     const subEnd = offset + dataSize;
