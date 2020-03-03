@@ -427,7 +427,8 @@ export default function getDisassembly(wasmArrayBuffer, maxBytesPerLine = 16) {
             readVaruintAndPrint(firstItemLabel);
         }
 
-        while (readPos < end) {
+        var failsafe = 99;
+        while (readPos < end && --failsafe) {
             switch (sectionCode) {
                 case SECTION_USER_DEFINED: {
                     const [size, LEBbytes] = decodeVaruint(wasm, readPos);
